@@ -67,12 +67,17 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" x-show="!loading && rooms.length > 0">
             <template x-for="room in rooms" :key="room.id">
-                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
-                    @click="window.location.href = '/room/' + room.id">
-                    <h3 class="text-xl font-semibold mb-2" x-text="room.name"></h3>
-                    <p class="text-sm text-gray-500" x-text="'擁有者: ' + (room.owner_name || room.owner_email)"></p>
-                    <p class="text-xs text-gray-400 mt-2"
-                        x-text="'建立時間: ' + new Date(room.created_at).toLocaleString('zh-TW')"></p>
+                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow relative">
+                    <div class="cursor-pointer" @click="window.location.href = '/room/' + room.id">
+                        <h3 class="text-xl font-semibold mb-2" x-text="room.name"></h3>
+                        <p class="text-sm text-gray-500" x-text="'擁有者: ' + (room.owner_name || room.owner_email)"></p>
+                        <p class="text-xs text-gray-400 mt-2"
+                            x-text="'建立時間: ' + new Date(room.created_at).toLocaleString('zh-TW')"></p>
+                    </div>
+                    <button x-show="room.can_delete" @click.stop="confirmDeleteRoom(room)"
+                        class="absolute top-2 right-2 text-red-500 hover:text-red-700 text-sm" title="刪除房間">
+                        刪除
+                    </button>
                 </div>
             </template>
         </div>
@@ -94,16 +99,23 @@
                     try {
                         // 先取得使用者資訊
                         const userResponse = await fetch('/api/auth/me');
+                        let currentUserEmail = '';
+                        let isAdmin = false;
                         if (userResponse.ok) {
                             const userData = await userResponse.json();
                             this.userName = userData.name || userData.email;
+                            currentUserEmail = userData.email;
+                            isAdmin = userData.is_admin || false;
                         }
 
                         const response = await fetch('/api/rooms');
                         const data = await response.json();
 
                         if (response.ok) {
-                            this.rooms = data.rooms || [];
+                            this.rooms = (data.rooms || []).map(room => ({
+                                ...room,
+                                can_delete: room.owner_email === currentUserEmail || isAdmin
+                            }));
                         } else {
                             if (response.status === 401) {
                                 window.location.href = '/login';
@@ -146,6 +158,34 @@
                             this.loadRooms();
                         } else {
                             this.message = data.error || '建立失敗';
+                            this.messageType = 'error';
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    }
+                },
+
+                confirmDeleteRoom(room) {
+                    if (confirm(`確定要刪除房間「${room.name}」嗎？此操作無法復原，所有支出記錄也會被刪除。`)) {
+                        this.deleteRoom(room.id);
+                    }
+                },
+
+                async deleteRoom(roomId) {
+                    try {
+                        const response = await fetch(`/api/rooms/${roomId}`, {
+                            method: 'DELETE'
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.message = '房間已刪除';
+                            this.messageType = 'success';
+                            this.loadRooms();
+                        } else {
+                            this.message = data.error || '刪除失敗';
                             this.messageType = 'error';
                         }
                     } catch (error) {

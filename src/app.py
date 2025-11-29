@@ -294,6 +294,49 @@ def get_room(room_id):
         "member_names": member_names
     })
 
+@app.route('/api/rooms/<room_id>', methods=['DELETE'])
+@login_required
+def delete_room(room_id):
+    """刪除房間（僅擁有者或管理員）"""
+    email = get_current_user()
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查房間是否存在
+    cursor.execute("SELECT owner_email FROM rooms WHERE id=?", (room_id,))
+    room = cursor.fetchone()
+    
+    if not room:
+        conn.close()
+        return jsonify({"error": "房間不存在"}), 404
+    
+    # 檢查權限：只有擁有者或管理員可以刪除
+    if room[0] != email and not is_admin(email):
+        conn.close()
+        return jsonify({"error": "無權限刪除此房間"}), 403
+    
+    # 刪除相關資料
+    # 1. 刪除支出參與者
+    cursor.execute("""
+        DELETE FROM expense_participants 
+        WHERE expense_id IN (SELECT id FROM expenses WHERE room_id=?)
+    """, (room_id,))
+    
+    # 2. 刪除支出
+    cursor.execute("DELETE FROM expenses WHERE room_id=?", (room_id,))
+    
+    # 3. 刪除房間成員
+    cursor.execute("DELETE FROM room_members WHERE room_id=?", (room_id,))
+    
+    # 4. 刪除房間
+    cursor.execute("DELETE FROM rooms WHERE id=?", (room_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "房間已刪除"})
+
 @app.route('/api/rooms/<room_id>/invite', methods=['POST'])
 @login_required
 def invite_to_room(room_id):
@@ -484,6 +527,39 @@ def create_expense(room_id):
     conn.close()
     
     return jsonify({"message": "支出建立成功", "expense_id": expense_id})
+
+@app.route('/api/rooms/<room_id>/expenses/<expense_id>', methods=['DELETE'])
+@login_required
+def delete_expense(room_id, expense_id):
+    """刪除支出（僅房間成員或管理員）"""
+    email = get_current_user()
+    
+    # 檢查是否有權限存取房間
+    if not can_access_room(email, room_id):
+        return jsonify({"error": "無權限存取此房間"}), 403
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查支出是否存在
+    cursor.execute(
+        "SELECT id FROM expenses WHERE id=? AND room_id=?",
+        (expense_id, room_id)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "支出記錄不存在"}), 404
+    
+    # 刪除支出參與者
+    cursor.execute("DELETE FROM expense_participants WHERE expense_id=?", (expense_id,))
+    
+    # 刪除支出
+    cursor.execute("DELETE FROM expenses WHERE id=?", (expense_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "支出記錄已刪除"})
 
 # ==================== 結算相關 API ====================
 

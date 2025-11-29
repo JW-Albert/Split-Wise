@@ -1,5 +1,8 @@
-from flask import Flask, request, jsonify, session, render_template, redirect, url_for
+from flask import Flask, request, jsonify, session, render_template, redirect, url_for, Response
 import os
+import csv
+import io
+from datetime import datetime
 from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db, get_db
@@ -685,6 +688,189 @@ def get_settlement(room_id):
         payment["to_name"] = user_names.get(payment["to"], payment["to"])
     
     return jsonify(result)
+
+# ==================== 匯出相關 API ====================
+
+@app.route('/api/rooms/<room_id>/export/expenses', methods=['GET'])
+@login_required
+def export_expenses(room_id):
+    """匯出支出記錄為 CSV"""
+    email = get_current_user()
+    
+    if not can_access_room(email, room_id):
+        return jsonify({"error": "無權限存取此房間"}), 403
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 取得房間資訊
+    cursor.execute("SELECT name FROM rooms WHERE id=?", (room_id,))
+    room = cursor.fetchone()
+    if not room:
+        conn.close()
+        return jsonify({"error": "房間不存在"}), 404
+    room_name = room[0]
+    
+    # 取得所有支出
+    cursor.execute(
+        "SELECT id, title, amount, payer_email, created_at FROM expenses WHERE room_id=? ORDER BY created_at DESC",
+        (room_id,)
+    )
+    expenses = cursor.fetchall()
+    
+    # 收集所有需要查詢名稱的 email
+    all_emails = set()
+    for expense in expenses:
+        all_emails.add(expense[3])  # payer_email
+        expense_id = expense[0]
+        cursor.execute(
+            "SELECT email FROM expense_participants WHERE expense_id=?",
+            (expense_id,)
+        )
+        participants = [p[0] for p in cursor.fetchall()]
+        all_emails.update(participants)
+    
+    # 取得所有用戶名稱
+    user_names = get_user_names(list(all_emails))
+    
+    # 建立 CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # 寫入 BOM（支援 Excel 正確顯示中文）
+    output.write('\ufeff')
+    
+    # 寫入標題
+    writer.writerow(['房間名稱', room_name])
+    writer.writerow(['匯出時間', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+    writer.writerow([])
+    writer.writerow(['支出記錄'])
+    writer.writerow(['日期', '標題', '金額', '付款人', '參與者'])
+    
+    # 寫入支出記錄
+    for expense in expenses:
+        expense_id = expense[0]
+        title = expense[1]
+        amount = expense[2]
+        payer_email = expense[3]
+        created_at = expense[4]
+        
+        # 取得參與者
+        cursor.execute(
+            "SELECT email FROM expense_participants WHERE expense_id=?",
+            (expense_id,)
+        )
+        participants = [p[0] for p in cursor.fetchall()]
+        participant_names = [user_names.get(p, p) for p in participants]
+        
+        payer_name = user_names.get(payer_email, payer_email)
+        participants_str = ', '.join(participant_names)
+        
+        writer.writerow([
+            created_at,
+            title,
+            amount,
+            payer_name,
+            participants_str
+        ])
+    
+    conn.close()
+    
+    # 建立回應
+    response = Response(
+        output.getvalue().encode('utf-8-sig'),
+        mimetype='text/csv; charset=utf-8-sig',
+        headers={
+            'Content-Disposition': f'attachment; filename="expenses_{room_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+        }
+    )
+    return response
+
+@app.route('/api/rooms/<room_id>/export/settlement', methods=['GET'])
+@login_required
+def export_settlement(room_id):
+    """匯出結算結果為 CSV"""
+    email = get_current_user()
+    
+    if not can_access_room(email, room_id):
+        return jsonify({"error": "無權限存取此房間"}), 403
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 取得房間資訊
+    cursor.execute("SELECT name FROM rooms WHERE id=?", (room_id,))
+    room = cursor.fetchone()
+    if not room:
+        conn.close()
+        return jsonify({"error": "房間不存在"}), 404
+    room_name = room[0]
+    
+    # 取得結算結果
+    result = calculate_settlement(room_id)
+    
+    # 取得所有用戶的名稱
+    all_emails = set()
+    for balance in result.get("balances", []):
+        all_emails.add(balance["email"])
+    for payment in result.get("payments", []):
+        all_emails.add(payment["from"])
+        all_emails.add(payment["to"])
+    
+    user_names = get_user_names(list(all_emails))
+    
+    # 添加名稱到結果中
+    for balance in result.get("balances", []):
+        balance["name"] = user_names.get(balance["email"], balance["email"])
+    
+    for payment in result.get("payments", []):
+        payment["from_name"] = user_names.get(payment["from"], payment["from"])
+        payment["to_name"] = user_names.get(payment["to"], payment["to"])
+    
+    conn.close()
+    
+    # 建立 CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # 寫入 BOM（支援 Excel 正確顯示中文）
+    output.write('\ufeff')
+    
+    # 寫入標題
+    writer.writerow(['房間名稱', room_name])
+    writer.writerow(['匯出時間', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+    writer.writerow([])
+    
+    # 寫入餘額
+    writer.writerow(['每人餘額'])
+    writer.writerow(['用戶', '餘額'])
+    for balance in result.get("balances", []):
+        writer.writerow([
+            balance["name"],
+            balance["balance"]
+        ])
+    
+    writer.writerow([])
+    
+    # 寫入付款建議
+    writer.writerow(['付款建議'])
+    writer.writerow(['付款人', '收款人', '金額'])
+    for payment in result.get("payments", []):
+        writer.writerow([
+            payment["from_name"],
+            payment["to_name"],
+            payment["amount"]
+        ])
+    
+    # 建立回應
+    response = Response(
+        output.getvalue().encode('utf-8-sig'),
+        mimetype='text/csv; charset=utf-8-sig',
+        headers={
+            'Content-Disposition': f'attachment; filename="settlement_{room_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+        }
+    )
+    return response
 
 # ==================== 頁面路由 ====================
 

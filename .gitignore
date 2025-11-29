@@ -15,6 +15,8 @@ instance/
 
 # Environment variables
 .env
+# .env.example should be tracked (not ignored)
+!.env.example
 
 # Database
 *.db

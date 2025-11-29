@@ -90,6 +90,16 @@
                                     <span class="font-semibold" x-text="'$' + (memberExpenses[member] || 0)"></span>
                                 </div>
                             </template>
+                            <!-- 顯示不在成員列表中但作為付款人的支出 -->
+                            <template x-for="(amount, payer) in memberExpenses" :key="payer">
+                                <template x-if="!room.members || !room.members.includes(payer)">
+                                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                        <span
+                                            x-text="room.member_names && room.member_names[payer] ? room.member_names[payer] : payer"></span>
+                                        <span class="font-semibold" x-text="'$' + amount"></span>
+                                    </div>
+                                </template>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -398,6 +408,7 @@
                     this.totalExpenses = this.expenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
 
                     // 計算每人的支出金額（作為付款人的總金額）
+                    // 先初始化所有房間成員的支出為 0
                     this.memberExpenses = {};
                     if (this.room && this.room.members) {
                         this.room.members.forEach(member => {
@@ -405,11 +416,15 @@
                         });
                     }
 
+                    // 累加每個付款人的支出金額
                     this.expenses.forEach(expense => {
                         const payer = expense.payer_email;
-                        if (this.memberExpenses.hasOwnProperty(payer)) {
-                            this.memberExpenses[payer] = (this.memberExpenses[payer] || 0) + (expense.amount || 0);
+                        // 如果付款人不在成員列表中，也要加入統計
+                        if (!this.memberExpenses.hasOwnProperty(payer)) {
+                            this.memberExpenses[payer] = 0;
                         }
+                        // 累加該付款人的所有支出
+                        this.memberExpenses[payer] = (this.memberExpenses[payer] || 0) + (expense.amount || 0);
                     });
                 },
 

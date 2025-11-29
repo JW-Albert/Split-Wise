@@ -3,6 +3,7 @@ import os
 import csv
 import io
 from datetime import datetime
+from urllib.parse import quote
 from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db, get_db
@@ -776,12 +777,17 @@ def export_expenses(room_id):
     
     conn.close()
     
+    # 建立檔案名稱（使用時間戳記避免中文問題）
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_filename = f"expenses_{timestamp}.csv"
+    utf8_filename = f"expenses_{room_name}_{timestamp}.csv"
+    
     # 建立回應
     response = Response(
         output.getvalue().encode('utf-8-sig'),
         mimetype='text/csv; charset=utf-8-sig',
         headers={
-            'Content-Disposition': f'attachment; filename="expenses_{room_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+            'Content-Disposition': f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{quote(utf8_filename)}'
         }
     )
     return response
@@ -862,12 +868,17 @@ def export_settlement(room_id):
             payment["amount"]
         ])
     
+    # 建立檔案名稱（使用時間戳記避免中文問題）
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_filename = f"settlement_{timestamp}.csv"
+    utf8_filename = f"settlement_{room_name}_{timestamp}.csv"
+    
     # 建立回應
     response = Response(
         output.getvalue().encode('utf-8-sig'),
         mimetype='text/csv; charset=utf-8-sig',
         headers={
-            'Content-Disposition': f'attachment; filename="settlement_{room_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+            'Content-Disposition': f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{quote(utf8_filename)}'
         }
     )
     return response

@@ -1,16 +1,21 @@
 # Split-Wise 分帳工具
 
+**版本：1.0.0**
+
 一個多人分帳工具，支援 Email 註冊/驗證碼登入、房間管理、支出記錄和自動結算功能。
 
 ## 功能特色
 
 - Email + OTP 驗證碼登入（無需密碼）
+- 用戶名稱系統（註冊時設定，全站顯示）
 - 房間（Room）管理系統
 - 支出記錄與分攤
 - 自動結算功能（雙指針配對算法）
 - 權限管理（管理員可查看所有房間）
+- 管理員用戶管理功能（新增、編輯、刪除用戶）
 - SQL Injection 防護（全部使用參數化查詢）
 - 現代化 UI（TailwindCSS + Alpine.js）
+- Cloudflare Tunnel 支援（ProxyFix 中間件）
 
 ## 技術棧
 
@@ -49,6 +54,7 @@ SMTP_USER=your-email@gmail.com
 SMTP_PASS=your-app-password
 
 ADMIN_EMAIL=admin@example.com
+ADMIN_NAME=管理員
 SECRET_KEY=your-secret-key-here-change-this-to-random-string
 ```
 
@@ -57,6 +63,7 @@ SECRET_KEY=your-secret-key-here-change-this-to-random-string
 - Gmail 需要使用「應用程式密碼」而非一般密碼
 - `SECRET_KEY` 請設定為隨機字串（用於 session 簽名）
 - `ADMIN_EMAIL` 設定的 email 將擁有管理員權限
+- `ADMIN_NAME` 為管理員的顯示名稱（可選，預設為「管理員」）
 
 ### 3. 初始化資料庫
 
@@ -98,7 +105,9 @@ python src/app.py
    - 訪問 `/login`
    - 輸入 email
    - 系統會發送 6 位數驗證碼到您的信箱
-   - 在 `/verify` 頁面輸入驗證碼完成登入
+   - 在 `/verify` 頁面輸入驗證碼
+   - 首次註冊或未設定名稱的使用者，系統會要求輸入用戶名稱
+   - 完成後即可登入
 
 2. **建立房間**
    - 登入後進入房間列表頁面
@@ -127,7 +136,8 @@ python src/app.py
 - `POST /api/auth/send-otp` - 發送驗證碼
 - `POST /api/auth/resend-otp` - 重新發送驗證碼
 - `POST /api/auth/verify-otp` - 驗證 OTP
-- `GET /api/auth/me` - 取得當前使用者資訊
+- `POST /api/auth/set-name` - 設定用戶名稱（首次註冊時）
+- `GET /api/auth/me` - 取得當前使用者資訊（包含名稱）
 - `POST /api/auth/logout` - 登出
 
 ### 房間相關
@@ -146,10 +156,19 @@ python src/app.py
 
 - `GET /api/rooms/<room_id>/settlement` - 取得結算結果
 
+### 管理員管理相關
+
+- `GET /admin/users` - 取得所有使用者列表（僅管理員）
+- `POST /admin/users` - 建立新使用者（僅管理員）
+- `PUT /admin/users/<user_email>` - 更新使用者名稱（僅管理員）
+- `DELETE /admin/users/<user_email>` - 刪除使用者（僅管理員）
+- `GET /admin` - 管理員管理頁面
+
 ## 資料庫結構
 
 ### users
 - `email` (PRIMARY KEY)
+- `name` (用戶名稱，可為 NULL)
 - `password_hash` (預留欄位)
 - `verified` (0 or 1)
 - `created_at`
@@ -216,6 +235,9 @@ cursor.execute(f"SELECT * FROM users WHERE email='{email}'")
 - Email 符合 `ADMIN_EMAIL` 的使用者
 - 可以查看所有房間
 - 可以管理所有房間
+- 可以訪問 `/admin` 管理頁面
+- 可以新增、編輯、刪除使用者帳號
+- 可以修改任何使用者的名稱
 
 ### 一般使用者
 
@@ -249,10 +271,12 @@ Split-Wise/
 │   │   ├── verify.html
 │   │   ├── rooms.html
 │   │   ├── room.html
+│   │   ├── admin.html
 │   │   └── error.html
 │   └── static/          # 靜態資源
 │       ├── style.css
-│       └── main.js
+│       ├── main.js
+│       └── bill.png
 ├── ENV/                  # 環境變數資料夾
 │   └── .env             # 環境變數檔案（不加入 git）
 ├── venv/                 # Python 虛擬環境（不加入 git）
@@ -280,6 +304,20 @@ Split-Wise/
 3. **錯誤處理**
    - 所有 API 回傳 JSON 格式
    - 錯誤格式：`{"error": "message"}`
+
+## 版本歷史
+
+### 1.0.0 (2025-11-29)
+
+- 初始版本發布
+- Email + OTP 驗證碼登入系統
+- 用戶名稱功能（註冊時設定）
+- 房間管理系統
+- 支出記錄與分攤
+- 自動結算功能（雙指針配對算法）
+- 管理員用戶管理功能
+- SQL Injection 防護（參數化查詢）
+- Cloudflare Tunnel 支援
 
 ## 授權
 

@@ -16,4 +16,6 @@ echo "Installing dependencies"
 pip install --upgrade pip
 pip install -r requirements.txt
 
+sudo rm splitwise.db
+
 echo "Deploy complete"

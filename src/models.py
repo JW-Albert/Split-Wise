@@ -11,7 +11,7 @@ def generate_otp():
     """生成 6 位數字 OTP"""
     return str(random.randint(100000, 999999))
 
-def create_user(email):
+def create_user(email, name=None):
     """建立新使用者（如果不存在）"""
     conn = get_db()
     cursor = conn.cursor()
@@ -24,12 +24,38 @@ def create_user(email):
     
     # 建立新使用者
     cursor.execute(
-        "INSERT INTO users (email, verified) VALUES (?, ?)",
-        (email, 1)
+        "INSERT INTO users (email, name, verified) VALUES (?, ?, ?)",
+        (email, name, 1)
     )
     conn.commit()
     conn.close()
     return True
+
+def update_user_name(email, name):
+    """更新使用者名稱"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "UPDATE users SET name=? WHERE email=?",
+        (name, email)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+def get_user_name(email):
+    """取得使用者名稱，如果沒有則返回 email"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT name FROM users WHERE email=?", (email,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result and result[0]:
+        return result[0]
+    return email
 
 def save_otp(email, otp):
     """儲存 OTP 到資料庫（10 分鐘有效）"""

@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, session, render_template, redirect, url_for
 import os
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db, get_db
-from models import generate_otp, save_otp, verify_otp, create_user, generate_room_id
+from models import generate_otp, save_otp, verify_otp, create_user, generate_room_id, update_user_name, get_user_name
 from mailer import send_otp_email
 from auth import login_required, is_admin, get_current_user, can_access_room, can_invite_to_room
 from calculations import calculate_settlement
@@ -13,6 +14,12 @@ load_dotenv(env_path)
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+
+# 配置 ProxyFix 以處理 Cloudflare Tunnel 的反向代理
+# x_for=1: 信任 1 層 X-Forwarded-For 標頭
+# x_proto=1: 信任 X-Forwarded-Proto 標頭
+# x_host=1: 信任 X-Forwarded-Host 標頭
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # 初始化資料庫
 init_db()
@@ -103,14 +110,54 @@ def verify_otp_endpoint():
     if not verify_otp(email, otp):
         return jsonify({"error": "驗證碼錯誤或已過期"}), 400
     
-    # 建立使用者（如果不存在）
-    create_user(email)
+    # 檢查使用者是否已存在且有名稱
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM users WHERE email=?", (email,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if user:
+        # 使用者已存在，檢查是否有名稱
+        if user[0]:
+            # 已有名稱，直接登入
+            session['email'] = email
+            session.pop('pending_email', None)
+            return jsonify({"message": "登入成功", "email": email, "needs_name": False})
+        else:
+            # 沒有名稱，需要輸入
+            session['otp_verified'] = True
+            return jsonify({"message": "請輸入用戶名稱", "needs_name": True})
+    else:
+        # 新使用者，需要輸入名稱
+        session['otp_verified'] = True
+        return jsonify({"message": "請輸入用戶名稱", "needs_name": True})
+
+@app.route('/api/auth/set-name', methods=['POST'])
+def set_user_name():
+    """設定用戶名稱"""
+    if 'pending_email' not in session or not session.get('otp_verified'):
+        return jsonify({"error": "請先完成驗證碼驗證"}), 400
+    
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    email = session['pending_email']
+    
+    if not name:
+        return jsonify({"error": "用戶名稱不能為空"}), 400
+    
+    if len(name) > 50:
+        return jsonify({"error": "用戶名稱不能超過 50 個字元"}), 400
+    
+    # 建立或更新使用者
+    create_user(email, name)
     
     # 設置 session
     session['email'] = email
     session.pop('pending_email', None)
+    session.pop('otp_verified', None)
     
-    return jsonify({"message": "登入成功", "email": email})
+    return jsonify({"message": "設定成功", "email": email})
 
 @app.route('/api/auth/me', methods=['GET'])
 @login_required
@@ -118,8 +165,10 @@ def get_current_user_info():
     """取得當前使用者資訊"""
     email = get_current_user()
     is_admin_user = is_admin(email)
+    name = get_user_name(email)
     return jsonify({
         "email": email,
+        "name": name,
         "is_admin": is_admin_user
     })
 
@@ -438,6 +487,145 @@ def room_page(room_id):
         return render_template('error.html', message="無權限存取此房間"), 403
     
     return render_template('room.html', room_id=room_id)
+
+# ==================== 管理員管理 API ====================
+
+@app.route('/admin/users', methods=['GET'])
+@login_required
+def get_all_users():
+    """取得所有使用者（僅管理員）"""
+    email = get_current_user()
+    
+    if not is_admin(email):
+        return jsonify({"error": "無權限"}), 403
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT email, name, verified, created_at FROM users ORDER BY created_at DESC")
+    users = cursor.fetchall()
+    conn.close()
+    
+    result = []
+    for user in users:
+        result.append({
+            "email": user[0],
+            "name": user[1] or user[0],  # 如果沒有名稱，使用 email
+            "verified": user[2] == 1,
+            "created_at": user[3]
+        })
+    
+    return jsonify({"users": result})
+
+@app.route('/admin/users/<user_email>', methods=['PUT'])
+@login_required
+def update_user(user_email):
+    """更新使用者資訊（僅管理員）"""
+    email = get_current_user()
+    
+    if not is_admin(email):
+        return jsonify({"error": "無權限"}), 403
+    
+    data = request.get_json()
+    new_name = data.get('name', '').strip()
+    
+    if not new_name:
+        return jsonify({"error": "用戶名稱不能為空"}), 400
+    
+    if len(new_name) > 50:
+        return jsonify({"error": "用戶名稱不能超過 50 個字元"}), 400
+    
+    update_user_name(user_email, new_name)
+    
+    return jsonify({"message": "更新成功"})
+
+@app.route('/admin/users', methods=['POST'])
+@login_required
+def create_user_by_admin():
+    """管理員建立新使用者"""
+    email = get_current_user()
+    
+    if not is_admin(email):
+        return jsonify({"error": "無權限"}), 403
+    
+    data = request.get_json()
+    user_email = data.get('email', '').strip().lower()
+    user_name = data.get('name', '').strip()
+    
+    if not user_email or '@' not in user_email:
+        return jsonify({"error": "請輸入有效的 email"}), 400
+    
+    if not user_name:
+        return jsonify({"error": "用戶名稱不能為空"}), 400
+    
+    if len(user_name) > 50:
+        return jsonify({"error": "用戶名稱不能超過 50 個字元"}), 400
+    
+    # 檢查使用者是否已存在
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email FROM users WHERE email=?", (user_email,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "使用者已存在"}), 400
+    conn.close()
+    
+    create_user(user_email, user_name)
+    
+    return jsonify({"message": "使用者建立成功"})
+
+@app.route('/admin/users/<user_email>', methods=['DELETE'])
+@login_required
+def delete_user(user_email):
+    """刪除使用者（僅管理員）"""
+    email = get_current_user()
+    
+    if not is_admin(email):
+        return jsonify({"error": "無權限"}), 403
+    
+    # 不能刪除自己
+    if user_email == email:
+        return jsonify({"error": "不能刪除自己的帳號"}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查使用者是否存在
+    cursor.execute("SELECT email FROM users WHERE email=?", (user_email,))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "使用者不存在"}), 404
+    
+    # 刪除使用者相關資料
+    # 刪除房間成員關係
+    cursor.execute("DELETE FROM room_members WHERE email=?", (user_email,))
+    # 刪除支出參與者
+    cursor.execute("""
+        DELETE FROM expense_participants 
+        WHERE email=? AND expense_id IN (
+            SELECT id FROM expenses WHERE payer_email=?
+        )
+    """, (user_email, user_email))
+    # 刪除使用者擁有的房間（可選，這裡選擇刪除）
+    cursor.execute("DELETE FROM rooms WHERE owner_email=?", (user_email,))
+    # 刪除使用者
+    cursor.execute("DELETE FROM users WHERE email=?", (user_email,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "使用者已刪除"})
+
+@app.route('/admin')
+@login_required
+def admin_page():
+    """管理員管理頁面"""
+    email = get_current_user()
+    
+    if not is_admin(email):
+        return render_template('error.html', message="無權限存取此頁面"), 403
+    
+    return render_template('admin.html')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -8,6 +8,7 @@ env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ENV', '.env
 load_dotenv(env_path)
 
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+ADMIN_NAME = os.getenv("ADMIN_NAME", "管理員")
 
 def login_required(f):
     """裝飾器：要求使用者必須登入"""

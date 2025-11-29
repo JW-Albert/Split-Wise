@@ -19,11 +19,18 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             email TEXT PRIMARY KEY,
+            name TEXT,
             password_hash TEXT,
             verified INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # 如果 name 欄位不存在，添加它（用於現有資料庫）
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN name TEXT")
+    except sqlite3.OperationalError:
+        pass  # 欄位已存在
     
     # login_tokens 表格
     cursor.execute("""

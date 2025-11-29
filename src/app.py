@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db, get_db
-from models import generate_otp, save_otp, verify_otp, create_user, generate_room_id, update_user_name, get_user_name
+from models import generate_otp, save_otp, verify_otp, create_user, generate_room_id, update_user_name, get_user_name, get_user_names
 from mailer import send_otp_email
 from auth import login_required, is_admin, get_current_user, can_access_room, can_invite_to_room
 from calculations import calculate_settlement
@@ -202,6 +202,11 @@ def get_rooms():
         """, (email, email))
     
     rooms = cursor.fetchall()
+    
+    # 取得所有擁有者的名稱
+    owner_emails = [room[2] for room in rooms]
+    owner_names = get_user_names(owner_emails)
+    
     conn.close()
     
     result = []
@@ -210,6 +215,7 @@ def get_rooms():
             "id": room[0],
             "name": room[1],
             "owner_email": room[2],
+            "owner_name": owner_names.get(room[2], room[2]),
             "created_at": room[3]
         })
     
@@ -270,6 +276,11 @@ def get_room(room_id):
     # 取得房間成員
     cursor.execute("SELECT email FROM room_members WHERE room_id=?", (room_id,))
     members = cursor.fetchall()
+    member_emails = [member[0] for member in members]
+    
+    # 取得所有成員的名稱
+    member_names = get_user_names(member_emails)
+    owner_name = get_user_name(room[2])
     
     conn.close()
     
@@ -277,8 +288,10 @@ def get_room(room_id):
         "id": room[0],
         "name": room[1],
         "owner_email": room[2],
+        "owner_name": owner_name,
         "created_at": room[3],
-        "members": [member[0] for member in members]
+        "members": member_emails,
+        "member_names": member_names
     })
 
 @app.route('/api/rooms/<room_id>/invite', methods=['POST'])
@@ -357,6 +370,21 @@ def get_expenses(room_id):
     )
     expenses = cursor.fetchall()
     
+    # 收集所有需要查詢名稱的 email
+    all_emails = set()
+    for expense in expenses:
+        all_emails.add(expense[3])  # payer_email
+        expense_id = expense[0]
+        cursor.execute(
+            "SELECT email FROM expense_participants WHERE expense_id=?",
+            (expense_id,)
+        )
+        participants = [p[0] for p in cursor.fetchall()]
+        all_emails.update(participants)
+    
+    # 取得所有用戶名稱
+    user_names = get_user_names(list(all_emails))
+    
     result = []
     for expense in expenses:
         expense_id = expense[0]
@@ -373,8 +401,10 @@ def get_expenses(room_id):
             "title": expense[1],
             "amount": expense[2],
             "payer_email": expense[3],
+            "payer_name": user_names.get(expense[3], expense[3]),
             "created_at": expense[4],
-            "participants": participants
+            "participants": participants,
+            "participant_names": {email: user_names.get(email, email) for email in participants}
         })
     
     conn.close()
@@ -467,6 +497,25 @@ def get_settlement(room_id):
         return jsonify({"error": "無權限存取此房間"}), 403
     
     result = calculate_settlement(room_id)
+    
+    # 取得所有用戶的名稱
+    all_emails = set()
+    for balance in result.get("balances", []):
+        all_emails.add(balance["email"])
+    for payment in result.get("payments", []):
+        all_emails.add(payment["from"])
+        all_emails.add(payment["to"])
+    
+    user_names = get_user_names(list(all_emails))
+    
+    # 添加名稱到結果中
+    for balance in result.get("balances", []):
+        balance["name"] = user_names.get(balance["email"], balance["email"])
+    
+    for payment in result.get("payments", []):
+        payment["from_name"] = user_names.get(payment["from"], payment["from"])
+        payment["to_name"] = user_names.get(payment["to"], payment["to"])
+    
     return jsonify(result)
 
 # ==================== 頁面路由 ====================

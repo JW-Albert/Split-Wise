@@ -28,7 +28,7 @@
         <!-- 房間資訊 -->
         <div class="bg-white p-6 rounded-lg shadow-md mb-6" x-show="room">
             <h1 class="text-3xl font-bold mb-2" x-text="room.name"></h1>
-            <p class="text-gray-600" x-text="'擁有者: ' + room.owner_email"></p>
+            <p class="text-gray-600" x-text="'擁有者: ' + (room.owner_name || room.owner_email)"></p>
         </div>
 
         <div x-show="message"
@@ -45,7 +45,8 @@
                     <ul class="space-y-2">
                         <template x-for="member in room.members || []" :key="member">
                             <li class="flex items-center justify-between py-2 border-b">
-                                <span x-text="member"></span>
+                                <span
+                                    x-text="room.member_names && room.member_names[member] ? room.member_names[member] : member"></span>
                             </li>
                         </template>
                     </ul>
@@ -87,7 +88,9 @@
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md">
                                 <option value="">選擇付款人</option>
                                 <template x-for="member in room.members || []" :key="member">
-                                    <option :value="member" x-text="member"></option>
+                                    <option :value="member"
+                                        x-text="room.member_names && room.member_names[member] ? room.member_names[member] : member">
+                                    </option>
                                 </template>
                             </select>
                         </div>
@@ -98,7 +101,8 @@
                                     <label class="flex items-center">
                                         <input type="checkbox" :value="member" x-model="newExpense.participants"
                                             class="mr-2">
-                                        <span x-text="member"></span>
+                                        <span
+                                            x-text="room.member_names && room.member_names[member] ? room.member_names[member] : member"></span>
                                     </label>
                                 </template>
                             </div>
@@ -124,9 +128,11 @@
                                     <h3 class="font-semibold" x-text="expense.title"></h3>
                                     <span class="text-lg font-bold" x-text="'$' + expense.amount"></span>
                                 </div>
-                                <p class="text-sm text-gray-600" x-text="'付款人: ' + expense.payer_email"></p>
+                                <p class="text-sm text-gray-600"
+                                    x-text="'付款人: ' + (expense.payer_name || expense.payer_email)"></p>
                                 <p class="text-sm text-gray-500 mt-1">
-                                    參與者: <span x-text="expense.participants.join(', ')"></span>
+                                    參與者: <span
+                                        x-text="expense.participants.map(p => expense.participant_names && expense.participant_names[p] ? expense.participant_names[p] : p).join(', ')"></span>
                                 </p>
                                 <p class="text-xs text-gray-400 mt-1"
                                     x-text="new Date(expense.created_at).toLocaleString('zh-TW')"></p>
@@ -157,7 +163,7 @@
                         <template x-for="balance in settlement.balances || []" :key="balance.email">
                             <div class="flex justify-between items-center p-2 rounded"
                                 :class="balance.balance > 0 ? 'bg-green-50' : balance.balance < 0 ? 'bg-red-50' : 'bg-gray-50'">
-                                <span x-text="balance.email"></span>
+                                <span x-text="balance.name || balance.email"></span>
                                 <span
                                     :class="balance.balance > 0 ? 'text-green-600' : balance.balance < 0 ? 'text-red-600' : 'text-gray-600'"
                                     x-text="(balance.balance > 0 ? '+' : '') + balance.balance">
@@ -173,9 +179,9 @@
                     <div class="space-y-2">
                         <template x-for="payment in settlement.payments" :key="payment.from + payment.to">
                             <div class="p-3 bg-blue-50 rounded">
-                                <span x-text="payment.from" class="font-semibold"></span>
+                                <span x-text="payment.from_name || payment.from" class="font-semibold"></span>
                                 <span class="mx-2">應付給</span>
-                                <span x-text="payment.to" class="font-semibold"></span>
+                                <span x-text="payment.to_name || payment.to" class="font-semibold"></span>
                                 <span class="ml-2 text-blue-600 font-bold" x-text="'$' + payment.amount"></span>
                             </div>
                         </template>

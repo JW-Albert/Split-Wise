@@ -57,6 +57,33 @@ def get_user_name(email):
         return result[0]
     return email
 
+def get_user_names(emails):
+    """取得多個使用者的名稱映射"""
+    if not emails:
+        return {}
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    placeholders = ','.join(['?'] * len(emails))
+    query = "SELECT email, name FROM users WHERE email IN (" + placeholders + ")"
+    cursor.execute(query, emails)
+    
+    result = {}
+    for row in cursor.fetchall():
+        email = row[0]
+        name = row[1]
+        result[email] = name if name else email
+    
+    conn.close()
+    
+    # 對於沒有找到的 email，使用 email 本身作為名稱
+    for email in emails:
+        if email not in result:
+            result[email] = email
+    
+    return result
+
 def save_otp(email, otp):
     """儲存 OTP 到資料庫（10 分鐘有效）"""
     conn = get_db()

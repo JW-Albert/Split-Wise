@@ -795,7 +795,7 @@ def export_expenses(room_id):
 @app.route('/api/rooms/<room_id>/export/settlement', methods=['GET'])
 @login_required
 def export_settlement(room_id):
-    """匯出結算結果為 CSV"""
+    """匯出結算結果為 CSV（包含消費記錄）"""
     email = get_current_user()
     
     if not can_access_room(email, room_id):
@@ -815,13 +815,29 @@ def export_settlement(room_id):
     # 取得結算結果
     result = calculate_settlement(room_id)
     
-    # 取得所有用戶的名稱
+    # 取得所有支出記錄
+    cursor.execute(
+        "SELECT id, title, amount, payer_email, created_at FROM expenses WHERE room_id=? ORDER BY created_at DESC",
+        (room_id,)
+    )
+    expenses = cursor.fetchall()
+    
+    # 收集所有需要查詢名稱的 email
     all_emails = set()
     for balance in result.get("balances", []):
         all_emails.add(balance["email"])
     for payment in result.get("payments", []):
         all_emails.add(payment["from"])
         all_emails.add(payment["to"])
+    for expense in expenses:
+        all_emails.add(expense[3])  # payer_email
+        expense_id = expense[0]
+        cursor.execute(
+            "SELECT email FROM expense_participants WHERE expense_id=?",
+            (expense_id,)
+        )
+        participants = [p[0] for p in cursor.fetchall()]
+        all_emails.update(participants)
     
     user_names = get_user_names(list(all_emails))
     
@@ -845,6 +861,40 @@ def export_settlement(room_id):
     # 寫入標題
     writer.writerow(['房間名稱', room_name])
     writer.writerow(['匯出時間', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+    writer.writerow([])
+    
+    # 寫入消費記錄
+    writer.writerow(['消費記錄'])
+    writer.writerow(['日期', '標題', '金額', '付款人', '參與者'])
+    for expense in expenses:
+        expense_id = expense[0]
+        title = expense[1]
+        amount = expense[2]
+        payer_email = expense[3]
+        created_at = expense[4]
+        
+        # 取得參與者
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT email FROM expense_participants WHERE expense_id=?",
+            (expense_id,)
+        )
+        participants = [p[0] for p in cursor.fetchall()]
+        conn.close()
+        
+        participant_names = [user_names.get(p, p) for p in participants]
+        payer_name = user_names.get(payer_email, payer_email)
+        participants_str = ', '.join(participant_names)
+        
+        writer.writerow([
+            created_at,
+            title,
+            amount,
+            payer_name,
+            participants_str
+        ])
+    
     writer.writerow([])
     
     # 寫入餘額
@@ -918,6 +968,14 @@ def get_all_users():
     
     cursor.execute("SELECT email, name, verified, created_at FROM users ORDER BY created_at DESC")
     users = cursor.fetchall()
+    
+    # 取得所有管理員列表
+    cursor.execute("SELECT email FROM admins")
+    admin_emails = {row[0] for row in cursor.fetchall()}
+    # 也包含環境變數中的管理員
+    if ADMIN_EMAIL:
+        admin_emails.add(ADMIN_EMAIL)
+    
     conn.close()
     
     result = []
@@ -926,7 +984,8 @@ def get_all_users():
             "email": user[0],
             "name": user[1] or user[0],  # 如果沒有名稱，使用 email
             "verified": user[2] == 1,
-            "created_at": user[3]
+            "created_at": user[3],
+            "is_admin": user[0] in admin_emails
         })
     
     return jsonify({"users": result})
@@ -1029,6 +1088,94 @@ def delete_user(user_email):
     conn.close()
     
     return jsonify({"message": "使用者已刪除"})
+
+@app.route('/admin/users/<user_email>/admin', methods=['POST'])
+@login_required
+def set_admin(user_email):
+    """設置使用者為管理員（僅管理員）"""
+    email = get_current_user()
+    
+    if not is_admin(email):
+        return jsonify({"error": "無權限"}), 403
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查使用者是否存在
+    cursor.execute("SELECT email FROM users WHERE email=?", (user_email,))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "使用者不存在"}), 404
+    
+    # 添加為管理員
+    cursor.execute("INSERT OR IGNORE INTO admins (email) VALUES (?)", (user_email,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "已設置為管理員"})
+
+@app.route('/admin/users/<user_email>/admin', methods=['DELETE'])
+@login_required
+def remove_admin(user_email):
+    """移除管理員權限（僅管理員）"""
+    email = get_current_user()
+    
+    if not is_admin(email):
+        return jsonify({"error": "無權限"}), 403
+    
+    # 不能移除自己（如果是環境變數中的管理員）
+    from auth import ADMIN_EMAIL
+    if user_email == ADMIN_EMAIL:
+        return jsonify({"error": "不能移除初始管理員"}), 400
+    
+    # 不能移除自己（如果是當前登入的管理員）
+    if user_email == email:
+        return jsonify({"error": "不能移除自己的管理員權限"}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 移除管理員權限
+    cursor.execute("DELETE FROM admins WHERE email=?", (user_email,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "已移除管理員權限"})
+
+@app.route('/admin/export/database', methods=['GET'])
+@login_required
+def export_database():
+    """匯出 SQLite 資料庫（僅管理員）"""
+    email = get_current_user()
+    
+    if not is_admin(email):
+        return jsonify({"error": "無權限"}), 403
+    
+    from database import DB_NAME
+    from datetime import datetime
+    from urllib.parse import quote
+    
+    if not os.path.exists(DB_NAME):
+        return jsonify({"error": "資料庫檔案不存在"}), 404
+    
+    # 讀取資料庫檔案
+    with open(DB_NAME, 'rb') as f:
+        db_data = f.read()
+    
+    # 建立檔案名稱
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_filename = f"splitwise_backup_{timestamp}.db"
+    utf8_filename = f"分帳工具備份_{timestamp}.db"
+    
+    # 建立回應
+    response = Response(
+        db_data,
+        mimetype='application/x-sqlite3',
+        headers={
+            'Content-Disposition': f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{quote(utf8_filename)}'
+        }
+    )
+    return response
 
 @app.route('/admin')
 @login_required

@@ -84,6 +84,19 @@ def init_db():
         )
     """)
     
+    # admins 表格（存儲管理員列表）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS admins (
+            email TEXT PRIMARY KEY,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # 如果 ADMIN_EMAIL 存在，將其加入管理員表
+    admin_email = os.getenv("ADMIN_EMAIL", "")
+    if admin_email:
+        cursor.execute("INSERT OR IGNORE INTO admins (email) VALUES (?)", (admin_email,))
+    
     conn.commit()
     conn.close()
 

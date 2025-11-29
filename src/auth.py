@@ -25,8 +25,20 @@ def login_required(f):
     return decorated_function
 
 def is_admin(email):
-    """檢查是否為管理員"""
-    return email == ADMIN_EMAIL
+    """檢查是否為管理員（檢查環境變數和資料庫）"""
+    # 先檢查環境變數中的管理員
+    if email == ADMIN_EMAIL:
+        return True
+    
+    # 檢查資料庫中的管理員列表
+    from database import get_db
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT email FROM admins WHERE email=?", (email,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result is not None
 
 def get_current_user():
     """取得當前登入的使用者 email"""

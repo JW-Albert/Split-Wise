@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import session, jsonify
+from flask import session, jsonify, request, redirect, url_for
 import os
 from dotenv import load_dotenv
 
@@ -15,7 +15,12 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'email' not in session:
-            return jsonify({"error": "請先登入"}), 401
+            # 如果是 API 請求，返回 JSON 錯誤
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "請先登入"}), 401
+            # 如果是頁面請求，重定向到登入頁面
+            else:
+                return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated_function
 

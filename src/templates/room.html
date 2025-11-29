@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>房間詳情 - 分帳工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen" x-data="roomPage()" x-init="init()">
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="/rooms" class="text-blue-500 hover:text-blue-700">← 返回房間列表</a>
+                </div>
+                <div class="flex items-center">
+                    <button @click="logout" class="text-red-500 hover:text-red-700">登出</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 房間資訊 -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6" x-show="room">
+            <h1 class="text-3xl font-bold mb-2" x-text="room.name"></h1>
+            <p class="text-gray-600" x-text="'擁有者: ' + room.owner_email"></p>
+        </div>
+
+        <div x-show="message" 
+             :class="messageType === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
+             class="p-3 rounded mb-4" 
+             x-text="message">
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 左側：成員和邀請 -->
+            <div class="space-y-6">
+                <!-- 成員列表 -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-4">房間成員</h2>
+                    <ul class="space-y-2">
+                        <template x-for="member in room.members || []" :key="member">
+                            <li class="flex items-center justify-between py-2 border-b">
+                                <span x-text="member"></span>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+
+                <!-- 邀請成員 -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-4">邀請成員</h2>
+                    <div class="space-y-2">
+                        <input 
+                            type="email" 
+                            x-model="inviteEmail"
+                            placeholder="輸入 email"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        >
+                        <button 
+                            @click="inviteMember"
+                            class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600"
+                        >
+                            邀請
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中間：支出列表 -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- 新增支出 -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-4">新增支出</h2>
+                    <form @submit.prevent="addExpense" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">標題</label>
+                            <input 
+                                type="text" 
+                                x-model="newExpense.title"
+                                required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                placeholder="例如：晚餐"
+                            >
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">金額</label>
+                            <input 
+                                type="number" 
+                                x-model="newExpense.amount"
+                                required
+                                min="1"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                placeholder="0"
+                            >
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">付款人</label>
+                            <select 
+                                x-model="newExpense.payer"
+                                required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            >
+                                <option value="">選擇付款人</option>
+                                <template x-for="member in room.members || []" :key="member">
+                                    <option :value="member" x-text="member"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">參與者（可多選）</label>
+                            <div class="space-y-2">
+                                <template x-for="member in room.members || []" :key="member">
+                                    <label class="flex items-center">
+                                        <input 
+                                            type="checkbox" 
+                                            :value="member"
+                                            x-model="newExpense.participants"
+                                            class="mr-2"
+                                        >
+                                        <span x-text="member"></span>
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
+                        <button 
+                            type="submit"
+                            class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600"
+                        >
+                            新增支出
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 支出列表 -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-4">支出記錄</h2>
+                    <div x-show="loadingExpenses" class="text-center py-4">載入中...</div>
+                    <div x-show="!loadingExpenses && expenses.length === 0" class="text-center py-4 text-gray-500">
+                        還沒有支出記錄
+                    </div>
+                    <div class="space-y-4" x-show="!loadingExpenses && expenses.length > 0">
+                        <template x-for="expense in expenses" :key="expense.id">
+                            <div class="border-b pb-4">
+                                <div class="flex justify-between items-start mb-2">
+                                    <h3 class="font-semibold" x-text="expense.title"></h3>
+                                    <span class="text-lg font-bold" x-text="'$' + expense.amount"></span>
+                                </div>
+                                <p class="text-sm text-gray-600" x-text="'付款人: ' + expense.payer_email"></p>
+                                <p class="text-sm text-gray-500 mt-1">
+                                    參與者: <span x-text="expense.participants.join(', ')"></span>
+                                </p>
+                                <p class="text-xs text-gray-400 mt-1" x-text="new Date(expense.created_at).toLocaleString('zh-TW')"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 結算結果 -->
+        <div class="mt-6 bg-white p-6 rounded-lg shadow-md">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">結算結果</h2>
+                <button 
+                    @click="loadSettlement"
+                    class="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600"
+                >
+                    重新計算
+                </button>
+            </div>
+            
+            <div x-show="loadingSettlement" class="text-center py-4">計算中...</div>
+            
+            <div x-show="!loadingSettlement && settlement" class="space-y-6">
+                <!-- 餘額 -->
+                <div>
+                    <h3 class="font-semibold mb-2">每人餘額</h3>
+                    <div class="space-y-2">
+                        <template x-for="balance in settlement.balances || []" :key="balance.email">
+                            <div class="flex justify-between items-center p-2 rounded"
+                                 :class="balance.balance > 0 ? 'bg-green-50' : balance.balance < 0 ? 'bg-red-50' : 'bg-gray-50'">
+                                <span x-text="balance.email"></span>
+                                <span :class="balance.balance > 0 ? 'text-green-600' : balance.balance < 0 ? 'text-red-600' : 'text-gray-600'"
+                                      x-text="(balance.balance > 0 ? '+' : '') + balance.balance">
+                                </span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- 付款建議 -->
+                <div x-show="settlement.payments && settlement.payments.length > 0">
+                    <h3 class="font-semibold mb-2">付款建議</h3>
+                    <div class="space-y-2">
+                        <template x-for="payment in settlement.payments" :key="payment.from + payment.to">
+                            <div class="p-3 bg-blue-50 rounded">
+                                <span x-text="payment.from" class="font-semibold"></span>
+                                <span class="mx-2">應付給</span>
+                                <span x-text="payment.to" class="font-semibold"></span>
+                                <span class="ml-2 text-blue-600 font-bold" x-text="'$' + payment.amount"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function roomPage() {
+            return {
+                roomId: '{{ room_id }}',
+                room: null,
+                expenses: [],
+                settlement: null,
+                loadingExpenses: true,
+                loadingSettlement: false,
+                message: '',
+                messageType: '',
+                inviteEmail: '',
+                newExpense: {
+                    title: '',
+                    amount: 0,
+                    payer: '',
+                    participants: []
+                },
+                
+                async init() {
+                    await Promise.all([
+                        this.loadRoom(),
+                        this.loadExpenses(),
+                        this.loadSettlement()
+                    ]);
+                },
+                
+                async loadRoom() {
+                    try {
+                        const response = await fetch(`/api/rooms/${this.roomId}`);
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.room = data;
+                        } else {
+                            if (response.status === 401) {
+                                window.location.href = '/login';
+                            } else {
+                                this.message = data.error || '載入失敗';
+                                this.messageType = 'error';
+                            }
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    }
+                },
+                
+                async loadExpenses() {
+                    this.loadingExpenses = true;
+                    try {
+                        const response = await fetch(`/api/rooms/${this.roomId}/expenses`);
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.expenses = data.expenses || [];
+                        } else {
+                            this.message = data.error || '載入支出失敗';
+                            this.messageType = 'error';
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    } finally {
+                        this.loadingExpenses = false;
+                    }
+                },
+                
+                async loadSettlement() {
+                    this.loadingSettlement = true;
+                    try {
+                        const response = await fetch(`/api/rooms/${this.roomId}/settlement`);
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.settlement = data;
+                        } else {
+                            this.message = data.error || '計算結算失敗';
+                            this.messageType = 'error';
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    } finally {
+                        this.loadingSettlement = false;
+                    }
+                },
+                
+                async inviteMember() {
+                    if (!this.inviteEmail.trim()) {
+                        this.message = '請輸入 email';
+                        this.messageType = 'error';
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch(`/api/rooms/${this.roomId}/invite`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ email: this.inviteEmail })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.message = '邀請成功';
+                            this.messageType = 'success';
+                            this.inviteEmail = '';
+                            this.loadRoom();
+                        } else {
+                            this.message = data.error || '邀請失敗';
+                            this.messageType = 'error';
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    }
+                },
+                
+                async addExpense() {
+                    if (!this.newExpense.title.trim()) {
+                        this.message = '請輸入標題';
+                        this.messageType = 'error';
+                        return;
+                    }
+                    
+                    if (this.newExpense.amount <= 0) {
+                        this.message = '金額必須大於 0';
+                        this.messageType = 'error';
+                        return;
+                    }
+                    
+                    if (!this.newExpense.payer) {
+                        this.message = '請選擇付款人';
+                        this.messageType = 'error';
+                        return;
+                    }
+                    
+                    if (this.newExpense.participants.length === 0) {
+                        this.message = '至少選擇一個參與者';
+                        this.messageType = 'error';
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch(`/api/rooms/${this.roomId}/expenses`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                title: this.newExpense.title,
+                                amount: parseInt(this.newExpense.amount),
+                                payer: this.newExpense.payer,
+                                participants: this.newExpense.participants
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.message = '支出新增成功';
+                            this.messageType = 'success';
+                            this.newExpense = {
+                                title: '',
+                                amount: 0,
+                                payer: '',
+                                participants: []
+                            };
+                            await Promise.all([
+                                this.loadExpenses(),
+                                this.loadSettlement()
+                            ]);
+                        } else {
+                            this.message = data.error || '新增失敗';
+                            this.messageType = 'error';
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    }
+                },
+                
+                async logout() {
+                    try {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                        window.location.href = '/login';
+                    } catch (error) {
+                        window.location.href = '/login';
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的房間 - 分帳工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen" x-data="roomsPage()" x-init="loadRooms()">
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold">分帳工具</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-700" x-text="userEmail ? '使用者: ' + userEmail : ''"></span>
+                    <button @click="logout" class="text-red-500 hover:text-red-700">登出</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold">我的房間</h2>
+            <button 
+                @click="showCreateModal = true"
+                class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600"
+            >
+                建立新房間
+            </button>
+        </div>
+
+        <div x-show="message" 
+             :class="messageType === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
+             class="p-3 rounded mb-4" 
+             x-text="message">
+        </div>
+
+        <!-- 建立房間模態框 -->
+        <div x-show="showCreateModal" 
+             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+             @click.self="showCreateModal = false"
+        >
+            <div class="bg-white p-6 rounded-lg w-full max-w-md">
+                <h3 class="text-xl font-bold mb-4">建立新房間</h3>
+                <input 
+                    type="text" 
+                    x-model="newRoomName"
+                    placeholder="房間名稱"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md mb-4"
+                >
+                <div class="flex justify-end space-x-2">
+                    <button 
+                        @click="showCreateModal = false"
+                        class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                    >
+                        取消
+                    </button>
+                    <button 
+                        @click="createRoom"
+                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                    >
+                        建立
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 房間列表 -->
+        <div x-show="loading" class="text-center py-8">載入中...</div>
+        
+        <div x-show="!loading && rooms.length === 0" class="text-center py-8 text-gray-500">
+            還沒有房間，建立一個開始使用吧！
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" x-show="!loading && rooms.length > 0">
+            <template x-for="room in rooms" :key="room.id">
+                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+                     @click="window.location.href = '/room/' + room.id">
+                    <h3 class="text-xl font-semibold mb-2" x-text="room.name"></h3>
+                    <p class="text-sm text-gray-500" x-text="'擁有者: ' + room.owner_email"></p>
+                    <p class="text-xs text-gray-400 mt-2" x-text="'建立時間: ' + new Date(room.created_at).toLocaleString('zh-TW')"></p>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <script>
+        function roomsPage() {
+            return {
+                rooms: [],
+                loading: true,
+                message: '',
+                messageType: '',
+                showCreateModal: false,
+                newRoomName: '',
+                userEmail: '',
+                
+                async loadRooms() {
+                    this.loading = true;
+                    try {
+                        // 先取得使用者資訊
+                        const userResponse = await fetch('/api/auth/me');
+                        if (userResponse.ok) {
+                            const userData = await userResponse.json();
+                            this.userEmail = userData.email;
+                        }
+                        
+                        const response = await fetch('/api/rooms');
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.rooms = data.rooms || [];
+                        } else {
+                            if (response.status === 401) {
+                                window.location.href = '/login';
+                            } else {
+                                this.message = data.error || '載入失敗';
+                                this.messageType = 'error';
+                            }
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                async createRoom() {
+                    if (!this.newRoomName.trim()) {
+                        this.message = '請輸入房間名稱';
+                        this.messageType = 'error';
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch('/api/rooms', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ name: this.newRoomName })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.showCreateModal = false;
+                            this.newRoomName = '';
+                            this.message = '房間建立成功';
+                            this.messageType = 'success';
+                            this.loadRooms();
+                        } else {
+                            this.message = data.error || '建立失敗';
+                            this.messageType = 'error';
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    }
+                },
+                
+                async logout() {
+                    try {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                        window.location.href = '/login';
+                    } catch (error) {
+                        window.location.href = '/login';
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+

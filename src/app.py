@@ -487,6 +487,15 @@ def create_expense(room_id):
     conn = get_db()
     cursor = conn.cursor()
     
+    # 檢查付款人是否是房間成員
+    cursor.execute(
+        "SELECT email FROM room_members WHERE room_id=? AND email=?",
+        (room_id, payer)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "付款人必須是房間成員"}), 400
+    
     # 檢查所有參與者是否都是房間成員
     # 使用參數化查詢，避免 SQL injection
     if len(participants) == 0:
@@ -503,11 +512,6 @@ def create_expense(room_id):
     if len(valid_members) != len(participants):
         conn.close()
         return jsonify({"error": "所有參與者必須是房間成員"}), 400
-    
-    # 檢查付款人是否在參與者中
-    if payer not in participants:
-        conn.close()
-        return jsonify({"error": "付款人必須在參與者列表中"}), 400
     
     # 建立支出
     cursor.execute(
@@ -527,6 +531,94 @@ def create_expense(room_id):
     conn.close()
     
     return jsonify({"message": "支出建立成功", "expense_id": expense_id})
+
+@app.route('/api/rooms/<room_id>/expenses/<expense_id>', methods=['PUT'])
+@login_required
+def update_expense(room_id, expense_id):
+    """更新支出（僅房間成員或管理員）"""
+    email = get_current_user()
+    
+    # 檢查是否有權限存取房間
+    if not can_access_room(email, room_id):
+        return jsonify({"error": "無權限存取此房間"}), 403
+    
+    data = request.get_json()
+    title = data.get('title', '').strip()
+    amount = data.get('amount', 0)
+    payer = data.get('payer', '').strip().lower()
+    participants = data.get('participants', [])
+    
+    if not title:
+        return jsonify({"error": "支出標題不能為空"}), 400
+    
+    if amount <= 0:
+        return jsonify({"error": "支出金額必須大於 0"}), 400
+    
+    if not payer or '@' not in payer:
+        return jsonify({"error": "請輸入有效的付款人 email"}), 400
+    
+    if not participants or len(participants) == 0:
+        return jsonify({"error": "至少需要一個參與者"}), 400
+    
+    # 轉換 participants 為小寫
+    participants = [p.strip().lower() for p in participants]
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查支出是否存在
+    cursor.execute(
+        "SELECT id FROM expenses WHERE id=? AND room_id=?",
+        (expense_id, room_id)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "支出記錄不存在"}), 404
+    
+    # 檢查付款人是否是房間成員
+    cursor.execute(
+        "SELECT email FROM room_members WHERE room_id=? AND email=?",
+        (room_id, payer)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "付款人必須是房間成員"}), 400
+    
+    # 檢查所有參與者是否都是房間成員
+    if len(participants) == 0:
+        conn.close()
+        return jsonify({"error": "至少需要一個參與者"}), 400
+    
+    placeholders = ','.join(['?'] * len(participants))
+    query = "SELECT email FROM room_members WHERE room_id=? AND email IN (" + placeholders + ")"
+    params = (room_id,) + tuple(participants)
+    cursor.execute(query, params)
+    valid_members = {row[0] for row in cursor.fetchall()}
+    
+    if len(valid_members) != len(participants):
+        conn.close()
+        return jsonify({"error": "所有參與者必須是房間成員"}), 400
+    
+    # 更新支出
+    cursor.execute(
+        "UPDATE expenses SET title=?, amount=?, payer_email=? WHERE id=?",
+        (title, amount, payer, expense_id)
+    )
+    
+    # 刪除舊的參與者
+    cursor.execute("DELETE FROM expense_participants WHERE expense_id=?", (expense_id,))
+    
+    # 加入新的參與者
+    for participant_email in participants:
+        cursor.execute(
+            "INSERT INTO expense_participants (expense_id, email) VALUES (?, ?)",
+            (expense_id, participant_email)
+        )
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "支出記錄已更新"})
 
 @app.route('/api/rooms/<room_id>/expenses/<expense_id>', methods=['DELETE'])
 @login_required

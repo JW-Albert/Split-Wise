@@ -132,24 +132,86 @@
                     <div class="space-y-4" x-show="!loadingExpenses && expenses.length > 0">
                         <template x-for="expense in expenses" :key="expense.id">
                             <div class="border-b pb-4 relative">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div class="flex-1">
-                                        <h3 class="font-semibold" x-text="expense.title"></h3>
-                                        <span class="text-lg font-bold" x-text="'$' + expense.amount"></span>
+                                <!-- 顯示模式 -->
+                                <div x-show="editingExpenseId !== expense.id">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div class="flex-1">
+                                            <h3 class="font-semibold" x-text="expense.title"></h3>
+                                            <span class="text-lg font-bold" x-text="'$' + expense.amount"></span>
+                                        </div>
+                                        <div class="flex space-x-2">
+                                            <button @click="editExpense(expense)"
+                                                class="text-blue-500 hover:text-blue-700 text-sm" title="編輯支出">
+                                                編輯
+                                            </button>
+                                            <button @click="confirmDeleteExpense(expense)"
+                                                class="text-red-500 hover:text-red-700 text-sm" title="刪除支出">
+                                                刪除
+                                            </button>
+                                        </div>
                                     </div>
-                                    <button @click="confirmDeleteExpense(expense)"
-                                        class="ml-4 text-red-500 hover:text-red-700 text-sm" title="刪除支出">
-                                        刪除
-                                    </button>
+                                    <p class="text-sm text-gray-600"
+                                        x-text="'付款人: ' + (expense.payer_name || expense.payer_email)"></p>
+                                    <p class="text-sm text-gray-500 mt-1">
+                                        參與者: <span
+                                            x-text="expense.participants.map(p => expense.participant_names && expense.participant_names[p] ? expense.participant_names[p] : p).join(', ')"></span>
+                                    </p>
+                                    <p class="text-xs text-gray-400 mt-1"
+                                        x-text="new Date(expense.created_at).toLocaleString('zh-TW')"></p>
                                 </div>
-                                <p class="text-sm text-gray-600"
-                                    x-text="'付款人: ' + (expense.payer_name || expense.payer_email)"></p>
-                                <p class="text-sm text-gray-500 mt-1">
-                                    參與者: <span
-                                        x-text="expense.participants.map(p => expense.participant_names && expense.participant_names[p] ? expense.participant_names[p] : p).join(', ')"></span>
-                                </p>
-                                <p class="text-xs text-gray-400 mt-1"
-                                    x-text="new Date(expense.created_at).toLocaleString('zh-TW')"></p>
+
+                                <!-- 編輯模式 -->
+                                <div x-show="editingExpenseId === expense.id" class="bg-gray-50 p-4 rounded">
+                                    <form @submit.prevent="updateExpense(expense.id)" class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium mb-1">標題</label>
+                                            <input type="text" x-model="editingExpense.title" required
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                placeholder="例如：晚餐">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium mb-1">金額</label>
+                                            <input type="number" x-model="editingExpense.amount" required min="1"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                placeholder="0">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium mb-1">付款人</label>
+                                            <select x-model="editingExpense.payer" required
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                                                <option value="">選擇付款人</option>
+                                                <template x-for="member in room.members || []" :key="member">
+                                                    <option :value="member"
+                                                        x-text="room.member_names && room.member_names[member] ? room.member_names[member] : member">
+                                                    </option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium mb-1">參與者（可多選）</label>
+                                            <div class="space-y-2">
+                                                <template x-for="member in room.members || []" :key="member">
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" :value="member"
+                                                            x-model="editingExpense.participants" class="mr-2">
+                                                        <span
+                                                            x-text="room.member_names && room.member_names[member] ? room.member_names[member] : member"></span>
+                                                    </label>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <div class="flex justify-end space-x-2">
+                                            <button type="button" @click="cancelEditExpense"
+                                                class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                                                取消
+                                            </button>
+                                            <button type="submit"
+                                                class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                                更新
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
                         </template>
                     </div>
@@ -217,7 +279,14 @@
                 message: '',
                 messageType: '',
                 inviteEmail: '',
+                editingExpenseId: null,
                 newExpense: {
+                    title: '',
+                    amount: 0,
+                    payer: '',
+                    participants: []
+                },
+                editingExpense: {
                     title: '',
                     amount: 0,
                     payer: '',
@@ -395,6 +464,91 @@
                             ]);
                         } else {
                             this.message = data.error || '新增失敗';
+                            this.messageType = 'error';
+                        }
+                    } catch (error) {
+                        this.message = '發生錯誤，請稍後再試';
+                        this.messageType = 'error';
+                    }
+                },
+
+                editExpense(expense) {
+                    this.editingExpenseId = expense.id;
+                    this.editingExpense = {
+                        title: expense.title,
+                        amount: expense.amount,
+                        payer: expense.payer_email,
+                        participants: [...expense.participants]
+                    };
+                },
+
+                cancelEditExpense() {
+                    this.editingExpenseId = null;
+                    this.editingExpense = {
+                        title: '',
+                        amount: 0,
+                        payer: '',
+                        participants: []
+                    };
+                },
+
+                async updateExpense(expenseId) {
+                    if (!this.editingExpense.title.trim()) {
+                        this.message = '請輸入標題';
+                        this.messageType = 'error';
+                        return;
+                    }
+
+                    if (this.editingExpense.amount <= 0) {
+                        this.message = '金額必須大於 0';
+                        this.messageType = 'error';
+                        return;
+                    }
+
+                    if (!this.editingExpense.payer) {
+                        this.message = '請選擇付款人';
+                        this.messageType = 'error';
+                        return;
+                    }
+
+                    if (this.editingExpense.participants.length === 0) {
+                        this.message = '至少選擇一個參與者';
+                        this.messageType = 'error';
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`/api/rooms/${this.roomId}/expenses/${expenseId}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                title: this.editingExpense.title,
+                                amount: parseInt(this.editingExpense.amount),
+                                payer: this.editingExpense.payer,
+                                participants: this.editingExpense.participants
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.message = '支出更新成功';
+                            this.messageType = 'success';
+                            this.editingExpenseId = null;
+                            this.editingExpense = {
+                                title: '',
+                                amount: 0,
+                                payer: '',
+                                participants: []
+                            };
+                            await Promise.all([
+                                this.loadExpenses(),
+                                this.loadSettlement()
+                            ]);
+                        } else {
+                            this.message = data.error || '更新失敗';
                             this.messageType = 'error';
                         }
                     } catch (error) {

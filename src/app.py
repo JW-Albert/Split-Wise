@@ -9,7 +9,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db, get_db
 from models import generate_otp, save_otp, verify_otp, create_user, generate_room_id, update_user_name, get_user_name, get_user_names
 from mailer import send_otp_email
-from auth import login_required, is_admin, get_current_user, can_access_room, can_invite_to_room
+from auth import login_required, is_admin, get_current_user, can_access_room, can_invite_to_room, ADMIN_EMAIL
 from calculations import calculate_settlement
 
 # 從 ENV/.env 載入環境變數
@@ -1124,7 +1124,6 @@ def remove_admin(user_email):
         return jsonify({"error": "無權限"}), 403
     
     # 不能移除自己（如果是環境變數中的管理員）
-    from auth import ADMIN_EMAIL
     if user_email == ADMIN_EMAIL:
         return jsonify({"error": "不能移除初始管理員"}), 400
     

@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>房間詳情 - 分帳工具</title>
+    <link rel="icon" type="image/png" href="/static/bill.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
+
 <body class="bg-gray-100 min-h-screen" x-data="roomPage()" x-init="init()">
     <nav class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -28,10 +31,9 @@
             <p class="text-gray-600" x-text="'擁有者: ' + room.owner_email"></p>
         </div>
 
-        <div x-show="message" 
-             :class="messageType === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
-             class="p-3 rounded mb-4" 
-             x-text="message">
+        <div x-show="message"
+            :class="messageType === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
+            class="p-3 rounded mb-4" x-text="message">
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -53,16 +55,10 @@
                 <div class="bg-white p-6 rounded-lg shadow-md">
                     <h2 class="text-xl font-bold mb-4">邀請成員</h2>
                     <div class="space-y-2">
-                        <input 
-                            type="email" 
-                            x-model="inviteEmail"
-                            placeholder="輸入 email"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        >
-                        <button 
-                            @click="inviteMember"
-                            class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600"
-                        >
+                        <input type="email" x-model="inviteEmail" placeholder="輸入 email"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        <button @click="inviteMember"
+                            class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600">
                             邀請
                         </button>
                     </div>
@@ -77,32 +73,18 @@
                     <form @submit.prevent="addExpense" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium mb-1">標題</label>
-                            <input 
-                                type="text" 
-                                x-model="newExpense.title"
-                                required
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                placeholder="例如：晚餐"
-                            >
+                            <input type="text" x-model="newExpense.title" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="例如：晚餐">
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-1">金額</label>
-                            <input 
-                                type="number" 
-                                x-model="newExpense.amount"
-                                required
-                                min="1"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                placeholder="0"
-                            >
+                            <input type="number" x-model="newExpense.amount" required min="1"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="0">
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-1">付款人</label>
-                            <select 
-                                x-model="newExpense.payer"
-                                required
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                            >
+                            <select x-model="newExpense.payer" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md">
                                 <option value="">選擇付款人</option>
                                 <template x-for="member in room.members || []" :key="member">
                                     <option :value="member" x-text="member"></option>
@@ -114,21 +96,15 @@
                             <div class="space-y-2">
                                 <template x-for="member in room.members || []" :key="member">
                                     <label class="flex items-center">
-                                        <input 
-                                            type="checkbox" 
-                                            :value="member"
-                                            x-model="newExpense.participants"
-                                            class="mr-2"
-                                        >
+                                        <input type="checkbox" :value="member" x-model="newExpense.participants"
+                                            class="mr-2">
                                         <span x-text="member"></span>
                                     </label>
                                 </template>
                             </div>
                         </div>
-                        <button 
-                            type="submit"
-                            class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600"
-                        >
+                        <button type="submit"
+                            class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600">
                             新增支出
                         </button>
                     </form>
@@ -152,7 +128,8 @@
                                 <p class="text-sm text-gray-500 mt-1">
                                     參與者: <span x-text="expense.participants.join(', ')"></span>
                                 </p>
-                                <p class="text-xs text-gray-400 mt-1" x-text="new Date(expense.created_at).toLocaleString('zh-TW')"></p>
+                                <p class="text-xs text-gray-400 mt-1"
+                                    x-text="new Date(expense.created_at).toLocaleString('zh-TW')"></p>
                             </div>
                         </template>
                     </div>
@@ -164,16 +141,14 @@
         <div class="mt-6 bg-white p-6 rounded-lg shadow-md">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">結算結果</h2>
-                <button 
-                    @click="loadSettlement"
-                    class="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600"
-                >
+                <button @click="loadSettlement"
+                    class="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600">
                     重新計算
                 </button>
             </div>
-            
+
             <div x-show="loadingSettlement" class="text-center py-4">計算中...</div>
-            
+
             <div x-show="!loadingSettlement && settlement" class="space-y-6">
                 <!-- 餘額 -->
                 <div>
@@ -181,10 +156,11 @@
                     <div class="space-y-2">
                         <template x-for="balance in settlement.balances || []" :key="balance.email">
                             <div class="flex justify-between items-center p-2 rounded"
-                                 :class="balance.balance > 0 ? 'bg-green-50' : balance.balance < 0 ? 'bg-red-50' : 'bg-gray-50'">
+                                :class="balance.balance > 0 ? 'bg-green-50' : balance.balance < 0 ? 'bg-red-50' : 'bg-gray-50'">
                                 <span x-text="balance.email"></span>
-                                <span :class="balance.balance > 0 ? 'text-green-600' : balance.balance < 0 ? 'text-red-600' : 'text-gray-600'"
-                                      x-text="(balance.balance > 0 ? '+' : '') + balance.balance">
+                                <span
+                                    :class="balance.balance > 0 ? 'text-green-600' : balance.balance < 0 ? 'text-red-600' : 'text-gray-600'"
+                                    x-text="(balance.balance > 0 ? '+' : '') + balance.balance">
                                 </span>
                             </div>
                         </template>
@@ -227,7 +203,7 @@
                     payer: '',
                     participants: []
                 },
-                
+
                 async init() {
                     await Promise.all([
                         this.loadRoom(),
@@ -235,12 +211,12 @@
                         this.loadSettlement()
                     ]);
                 },
-                
+
                 async loadRoom() {
                     try {
                         const response = await fetch(`/api/rooms/${this.roomId}`);
                         const data = await response.json();
-                        
+
                         if (response.ok) {
                             this.room = data;
                         } else {
@@ -256,13 +232,13 @@
                         this.messageType = 'error';
                     }
                 },
-                
+
                 async loadExpenses() {
                     this.loadingExpenses = true;
                     try {
                         const response = await fetch(`/api/rooms/${this.roomId}/expenses`);
                         const data = await response.json();
-                        
+
                         if (response.ok) {
                             this.expenses = data.expenses || [];
                         } else {
@@ -276,13 +252,13 @@
                         this.loadingExpenses = false;
                     }
                 },
-                
+
                 async loadSettlement() {
                     this.loadingSettlement = true;
                     try {
                         const response = await fetch(`/api/rooms/${this.roomId}/settlement`);
                         const data = await response.json();
-                        
+
                         if (response.ok) {
                             this.settlement = data;
                         } else {
@@ -296,14 +272,14 @@
                         this.loadingSettlement = false;
                     }
                 },
-                
+
                 async inviteMember() {
                     if (!this.inviteEmail.trim()) {
                         this.message = '請輸入 email';
                         this.messageType = 'error';
                         return;
                     }
-                    
+
                     try {
                         const response = await fetch(`/api/rooms/${this.roomId}/invite`, {
                             method: 'POST',
@@ -312,9 +288,9 @@
                             },
                             body: JSON.stringify({ email: this.inviteEmail })
                         });
-                        
+
                         const data = await response.json();
-                        
+
                         if (response.ok) {
                             this.message = '邀請成功';
                             this.messageType = 'success';
@@ -329,32 +305,32 @@
                         this.messageType = 'error';
                     }
                 },
-                
+
                 async addExpense() {
                     if (!this.newExpense.title.trim()) {
                         this.message = '請輸入標題';
                         this.messageType = 'error';
                         return;
                     }
-                    
+
                     if (this.newExpense.amount <= 0) {
                         this.message = '金額必須大於 0';
                         this.messageType = 'error';
                         return;
                     }
-                    
+
                     if (!this.newExpense.payer) {
                         this.message = '請選擇付款人';
                         this.messageType = 'error';
                         return;
                     }
-                    
+
                     if (this.newExpense.participants.length === 0) {
                         this.message = '至少選擇一個參與者';
                         this.messageType = 'error';
                         return;
                     }
-                    
+
                     try {
                         const response = await fetch(`/api/rooms/${this.roomId}/expenses`, {
                             method: 'POST',
@@ -368,9 +344,9 @@
                                 participants: this.newExpense.participants
                             })
                         });
-                        
+
                         const data = await response.json();
-                        
+
                         if (response.ok) {
                             this.message = '支出新增成功';
                             this.messageType = 'success';
@@ -393,7 +369,7 @@
                         this.messageType = 'error';
                     }
                 },
-                
+
                 async logout() {
                     try {
                         await fetch('/api/auth/logout', { method: 'POST' });
@@ -406,5 +382,5 @@
         }
     </script>
 </body>
-</html>
 
+</html>

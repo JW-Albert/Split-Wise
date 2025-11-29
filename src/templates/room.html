@@ -72,6 +72,27 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- 消費統計 -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-4">消費統計</h2>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                            <span class="font-semibold">總消費</span>
+                            <span class="text-lg font-bold text-blue-600" x-text="'$' + totalExpenses"></span>
+                        </div>
+                        <div class="space-y-2">
+                            <h3 class="text-sm font-medium text-gray-700 mb-2">每人支出</h3>
+                            <template x-for="member in room.members || []" :key="member">
+                                <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                    <span
+                                        x-text="room.member_names && room.member_names[member] ? room.member_names[member] : member"></span>
+                                    <span class="font-semibold" x-text="'$' + (memberExpenses[member] || 0)"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 中間：支出列表 -->
@@ -306,6 +327,8 @@
                     payer: '',
                     participants: []
                 },
+                totalExpenses: 0,
+                memberExpenses: {},
 
                 async init() {
                     await Promise.all([
@@ -357,6 +380,7 @@
 
                         if (response.ok) {
                             this.expenses = data.expenses || [];
+                            this.calculateExpenseStats();
                         } else {
                             this.message = data.error || '載入支出失敗';
                             this.messageType = 'error';
@@ -367,6 +391,26 @@
                     } finally {
                         this.loadingExpenses = false;
                     }
+                },
+
+                calculateExpenseStats() {
+                    // 計算總消費
+                    this.totalExpenses = this.expenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+
+                    // 計算每人的支出金額（作為付款人的總金額）
+                    this.memberExpenses = {};
+                    if (this.room && this.room.members) {
+                        this.room.members.forEach(member => {
+                            this.memberExpenses[member] = 0;
+                        });
+                    }
+
+                    this.expenses.forEach(expense => {
+                        const payer = expense.payer_email;
+                        if (this.memberExpenses.hasOwnProperty(payer)) {
+                            this.memberExpenses[payer] = (this.memberExpenses[payer] || 0) + (expense.amount || 0);
+                        }
+                    });
                 },
 
                 async loadSettlement() {
@@ -476,6 +520,7 @@
                                 this.loadExpenses(),
                                 this.loadSettlement()
                             ]);
+                            this.calculateExpenseStats();
                         } else {
                             this.message = data.error || '新增失敗';
                             this.messageType = 'error';
@@ -561,6 +606,7 @@
                                 this.loadExpenses(),
                                 this.loadSettlement()
                             ]);
+                            this.calculateExpenseStats();
                         } else {
                             this.message = data.error || '更新失敗';
                             this.messageType = 'error';
@@ -592,6 +638,7 @@
                                 this.loadExpenses(),
                                 this.loadSettlement()
                             ]);
+                            this.calculateExpenseStats();
                         } else {
                             this.message = data.error || '刪除失敗';
                             this.messageType = 'error';

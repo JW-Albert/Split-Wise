@@ -4,7 +4,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 
-load_dotenv()
+# 從 ENV/.env 載入環境變數
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ENV', '.env')
+load_dotenv(env_path)
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

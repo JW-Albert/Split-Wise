@@ -7,7 +7,9 @@ from mailer import send_otp_email
 from auth import login_required, is_admin, get_current_user, can_access_room, can_invite_to_room
 from calculations import calculate_settlement
 
-load_dotenv()
+# 從 ENV/.env 載入環境變數
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ENV', '.env')
+load_dotenv(env_path)
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")

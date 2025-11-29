@@ -3,7 +3,9 @@ from flask import session, jsonify
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# 從 ENV/.env 載入環境變數
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ENV', '.env')
+load_dotenv(env_path)
 
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
 

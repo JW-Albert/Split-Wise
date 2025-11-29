@@ -31,7 +31,16 @@ pip install -r requirements.txt
 
 ### 2. 設定環境變數
 
-複製 `.env.example` 並建立 `.env` 檔案：
+複製 `.env.example` 並在 `ENV/` 資料夾中建立 `.env` 檔案：
+
+```bash
+# 如果專案中有 .env.example，複製它
+cp .env.example ENV/.env
+
+# 或手動在 ENV/ 資料夾中建立 .env 檔案
+```
+
+`.env` 檔案內容：
 
 ```env
 SMTP_HOST=smtp.gmail.com
@@ -44,6 +53,7 @@ SECRET_KEY=your-secret-key-here-change-this-to-random-string
 ```
 
 **重要提示**：
+- `.env` 檔案必須放在 `ENV/` 資料夾中
 - Gmail 需要使用「應用程式密碼」而非一般密碼
 - `SECRET_KEY` 請設定為隨機字串（用於 session 簽名）
 - `ADMIN_EMAIL` 設定的 email 將擁有管理員權限
@@ -53,17 +63,31 @@ SECRET_KEY=your-secret-key-here-change-this-to-random-string
 執行應用程式時會自動建立資料庫和表格：
 
 ```bash
-python app.py
+# 使用 Python 直接執行
+python src/app.py
+
+# 或使用提供的腳本（Linux/Mac）
+bash run.sh
 ```
 
-資料庫檔案 `splitwise.db` 會自動建立。
+資料庫檔案 `splitwise.db` 會自動建立在專案根目錄。
 
 ## 使用說明
 
 ### 啟動應用程式
 
 ```bash
-python app.py
+# 方法 1: 使用 Python 直接執行
+python src/app.py
+
+# 方法 2: 使用提供的腳本（Linux/Mac）
+bash run.sh
+
+# 方法 3: 在虛擬環境中執行
+source venv/bin/activate  # Linux/Mac
+# 或
+venv\Scripts\activate     # Windows
+python src/app.py
 ```
 
 應用程式會在 `http://localhost:5000` 啟動。
@@ -213,24 +237,32 @@ cursor.execute(f"SELECT * FROM users WHERE email='{email}'")
 
 ```
 Split-Wise/
-├── app.py                 # 主應用程式
-├── database.py            # 資料庫初始化
-├── models.py              # 資料模型和工具函數
-├── auth.py                # 認證和權限檢查
-├── calculations.py        # 結算算法
-├── mailer.py             # SMTP 郵件發送
-├── requirements.txt      # Python 依賴
-├── .env                  # 環境變數（不加入 git）
-├── splitwise.db          # SQLite 資料庫（自動產生）
-├── templates/            # HTML 模板
-│   ├── login.html
-│   ├── verify.html
-│   ├── rooms.html
-│   ├── room.html
-│   └── error.html
-└── static/               # 靜態資源
-    ├── style.css
-    └── main.js
+├── src/                   # 原始碼目錄
+│   ├── app.py            # 主應用程式
+│   ├── database.py      # 資料庫初始化
+│   ├── models.py        # 資料模型和工具函數
+│   ├── auth.py          # 認證和權限檢查
+│   ├── calculations.py # 結算算法
+│   ├── mailer.py        # SMTP 郵件發送
+│   ├── templates/       # HTML 模板
+│   │   ├── login.html
+│   │   ├── verify.html
+│   │   ├── rooms.html
+│   │   ├── room.html
+│   │   └── error.html
+│   └── static/          # 靜態資源
+│       ├── style.css
+│       └── main.js
+├── ENV/                  # 環境變數資料夾
+│   └── .env             # 環境變數檔案（不加入 git）
+├── venv/                 # Python 虛擬環境（不加入 git）
+├── requirements.txt     # Python 依賴
+├── .env.example         # 環境變數範例檔案
+├── .gitignore           # Git 忽略規則
+├── run.sh               # 啟動腳本（Linux/Mac）
+├── deploy.sh            # 部署腳本（Linux/Mac）
+├── splitwise.db         # SQLite 資料庫（自動產生，不加入 git）
+└── README.md            # 專案說明文件
 ```
 
 ## 開發注意事項
@@ -240,8 +272,10 @@ Split-Wise/
    - 動態 SQL 使用字串拼接 `?` 而非值
 
 2. **環境變數**
-   - 所有敏感資訊從 `.env` 載入
-   - `.env` 不要加入版本控制
+   - 所有敏感資訊從 `ENV/.env` 載入
+   - `.env` 檔案必須放在 `ENV/` 資料夾中
+   - `ENV/.env` 不要加入版本控制（已在 .gitignore 中設定）
+   - 使用 `.env.example` 作為範本
 
 3. **錯誤處理**
    - 所有 API 回傳 JSON 格式

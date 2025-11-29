@@ -4,9 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 venv/
-ENV/
 .venv
 
 # Flask
@@ -15,6 +13,7 @@ instance/
 
 # Environment variables
 .env
+ENV/.env
 # .env.example should be tracked (not ignored)
 !.env.example
 

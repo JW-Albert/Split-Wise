@@ -1,6 +1,6 @@
 # Split-Wise 分帳工具
 
-**版本：1.1.0**
+**版本：1.2.0**
 
 一個多人分帳工具，支援 Email 註冊/驗證碼登入、房間管理、支出記錄和自動結算功能。
 
@@ -100,6 +100,52 @@ python src/app.py
 ```
 
 應用程式會在 `http://localhost:5000` 啟動。
+
+### 設定開機自動啟動
+
+#### Linux (systemd)
+
+1. **安裝服務**
+   ```bash
+   cd boot
+   sudo bash install_service.sh
+   ```
+
+2. **服務管理**
+   ```bash
+   # 啟動服務
+   sudo systemctl start splitwise
+   
+   # 停止服務
+   sudo systemctl stop splitwise
+   
+   # 重啟服務
+   sudo systemctl restart splitwise
+   
+   # 查看狀態
+   sudo systemctl status splitwise
+   
+   # 查看日誌
+   sudo journalctl -u splitwise -f
+   
+   # 禁用開機啟動
+   sudo systemctl disable splitwise
+   ```
+
+3. **卸載服務**
+   ```bash
+   cd boot
+   sudo bash uninstall_service.sh
+   ```
+
+#### Windows
+
+1. 將 `boot/start_windows.bat` 複製到 Windows 啟動資料夾：
+   - 按 `Win + R` 開啟執行對話框
+   - 輸入 `shell:startup` 並按 Enter
+   - 將 `start_windows.bat` 的快捷方式放入此資料夾
+
+2. 或者使用工作排程器設定開機自動執行
 
 ### 使用流程
 
@@ -310,6 +356,11 @@ Split-Wise/
 │       ├── style.css
 │       ├── main.js
 │       └── bill.png
+├── boot/                # 開機自動啟動腳本
+│   ├── splitwise.service    # systemd 服務配置（Linux）
+│   ├── install_service.sh   # 安裝開機自動啟動腳本（Linux）
+│   ├── uninstall_service.sh # 卸載開機自動啟動腳本（Linux）
+│   └── start_windows.bat    # Windows 開機啟動腳本
 ├── ENV/                  # 環境變數資料夾
 │   └── .env             # 環境變數檔案（不加入 git）
 ├── venv/                 # Python 虛擬環境（不加入 git）
@@ -339,6 +390,17 @@ Split-Wise/
    - 錯誤格式：`{"error": "message"}`
 
 ## 版本歷史
+
+### 1.2.0 (2025-11-29)
+
+- 開機自動啟動功能
+  - 提供 Linux systemd 服務配置
+  - 提供安裝和卸載腳本
+  - 提供 Windows 啟動腳本
+  - 支援服務自動重啟
+- 消費統計功能
+  - 在房間頁面顯示總消費金額
+  - 顯示每個成員的支出金額
 
 ### 1.1.0 (2025-11-29)
 

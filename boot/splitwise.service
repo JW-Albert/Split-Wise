@@ -1,0 +1,16 @@
+[Unit]
+Description=Split-Wise 分帳工具
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/Split-Wise
+Environment="PATH=/root/Split-Wise/venv/bin"
+ExecStart=/root/Split-Wise/venv/bin/python3 /root/Split-Wise/src/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
